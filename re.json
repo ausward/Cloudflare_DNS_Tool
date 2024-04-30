@@ -1,4 +1,0 @@
-Username: test
-Password: X-Auth-Key
-No results found
-{"result":null,"success":false,"errors":[{"code":7003,"message":"Could not route to /client/v4/zones/dns_records, perhaps your object identifier is invalid?"}],"messages":[]}
