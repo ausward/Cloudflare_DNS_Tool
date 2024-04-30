@@ -24,7 +24,11 @@ type DNS_REC struct {
 	ttl     interface{}
 	content string
 }
+func (d DNS_REC) String() string{
+	return fmt.Sprintf("Name: %v\nType: %v\nProxied: %v\nComment: %v\nTags: %v\nTTL: %v\nContent: %v\n",  d.name, d.typpe, d.proxied, d.comment, d.tags, d.ttl, d.content)
 
+
+}
 type DNS_REC_LIST struct {
 	list []DNS_REC
 }
