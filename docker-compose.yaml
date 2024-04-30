@@ -1,0 +1,17 @@
+version: "3"
+services:
+  CLOUDFLARE_API:
+    image: auswar/cloudflare_dns_update:v1
+    volumes:
+      - ./CONFIG/:/config
+    environment:
+      - LOGPATH="/config/log.txt"
+
+
+
+# LOGPATH env should be something like "/config/log.txt" if you want the log file, if its not in the config folder the logs will be lost when the container is removed
+
+# There needs to be a yaml file in the CONFIG folder that has the following format:
+# Path: CONFIG/config.yaml
+#   X-Auth-Email: "cloudflair account email"
+#   X-Auth-Key: "X-Auth-Key from cloudflare"
