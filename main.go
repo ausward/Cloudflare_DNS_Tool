@@ -57,6 +57,8 @@ func main() {
 	print(header)
 	log.Println(header)
 
+	// get Zone IDs
+
 	var zones = http.Request{
 		Method: "GET",
 		URL: &url.URL{
@@ -97,6 +99,8 @@ func main() {
 	} else {
 		log.Fatal("No results found")
 	}
+
+// Get DNS records
 
 	var list = http.Request{
 		Method: "GET",
@@ -183,6 +187,17 @@ func main() {
 	// Print the response body
 	var local_ip string = string(body)
 
+
+// Check if the IP address has changed if not exit
+
+	if local_ip == A_rec.list[0].content {
+		log.Println("IP address has not changed")
+		logFile.Close()
+		os.Exit(0)
+	}
+
+
+	// Update the DNS  A records
 
 	for _, record := range A_rec.list {
 		if record.comment == nil {
