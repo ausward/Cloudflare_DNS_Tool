@@ -163,7 +163,7 @@ func main() {
 		dns_records.list = append(dns_records.list, rec)
 	}
 	for _, rec := range dns_records.list {
-		fmt.Println(rec)
+		fmt.Println(rec.String())
 	}
 
 	A_rec := DNS_REC_LIST{}
