@@ -12,6 +12,9 @@ import (
 
 	"example.com/v1/CF/get_config"
 )
+func (d DNS_REC) String() string{
+	return fmt.Sprintf("Name: %v\nType: %v\nProxied: %v\nComment: %v\nTags: %v\nTTL: %v\nContent: %v\n",  d.name, d.typpe, d.proxied, d.comment, d.tags, d.ttl, d.content)
+}
 
 type DNS_REC struct {
 	zone_id interface{}
@@ -160,7 +163,7 @@ func main() {
 		dns_records.list = append(dns_records.list, rec)
 	}
 	for _, rec := range dns_records.list {
-		fmt.Println(rec)
+		fmt.Println(rec.String())
 	}
 
 	A_rec := DNS_REC_LIST{}
