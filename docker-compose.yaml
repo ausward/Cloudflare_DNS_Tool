@@ -1,7 +1,7 @@
 version: "3"
 services:
   CLOUDFLARE_API:
-    image: auswar/cloudflare_dns_update:v1
+    image: auswar/cloudflare_dns_update:v1.0.1
     volumes:
       - ./CONFIG/:/config
     environment:

@@ -16,11 +16,11 @@ func Get_account_info() (string, string) {
 	_, err := os.Stat("/.dockerenv")
 	var data []byte
 	if err != nil {
-		print("Not in Docker")
+		println("Not in Docker")
 		data, err = os.ReadFile("./CONFIG/config.yaml")	
 	
 	} else {
-		print("In Docker")
+		println("In Docker")
 		data, err = os.ReadFile("/config/config.yaml")
 	}
 

@@ -26,8 +26,6 @@ type DNS_REC struct {
 }
 func (d DNS_REC) String() string{
 	return fmt.Sprintf("Name: %v\nType: %v\nProxied: %v\nComment: %v\nTags: %v\nTTL: %v\nContent: %v\n",  d.name, d.typpe, d.proxied, d.comment, d.tags, d.ttl, d.content)
-
-
 }
 type DNS_REC_LIST struct {
 	list []DNS_REC
@@ -40,7 +38,6 @@ func main() {
 
 
 	logPath := os.Getenv("LOGPATH")
-	print(logPath)
 	if logPath == "" {
 		logPath = "./log.txt"
 	}
@@ -58,8 +55,6 @@ func main() {
 	header.Add("Content-Type", "application/json")
 	header.Add("X-Auth-Key", key)
 
-	print(header)
-	log.Println(header)
 
 	var zones = http.Request{
 		Method: "GET",
@@ -87,7 +82,7 @@ func main() {
 		} `json:"result"`
 	}
 	
-	log.Print(data.Result)
+	// log.Print(data.Result)
 
 	err = json.Unmarshal(body, &data)
 	if err != nil {
@@ -122,9 +117,9 @@ func main() {
 		log.Fatal(err)
 	}
 	defer response.Body.Close()
-	log.Print("\n\n\n")
-	fmt.Println(string(body))
-	println("\n\n\n")
+	// log.Print("\n\n\n")
+	// fmt.Println(string(body))
+	// println("\n\n\n")
 	// Convert body to JSON
 	var data2 interface{}
 	err = json.Unmarshal(body, &data2)
@@ -132,7 +127,7 @@ func main() {
 		log.Print(err)
 	}
 
-	log.Println(data.Result)
+	// log.Println(data.Result)
 
 	// Print the JSON data
 	// fmt.Println(data)
@@ -186,6 +181,8 @@ func main() {
 
 	// Print the response body
 	var local_ip string = string(body)
+
+	
 
 
 	for _, record := range A_rec.list {
