@@ -189,10 +189,9 @@ func main() {
 	log.Println("local IP: ", local_ip)
 	fmt.Println("local IP: ", local_ip)
 
-
 // Check if the IP address has changed if not exit
 
-	if local_ip != A_rec.list[0].content {
+	if local_ip == A_rec.list[0].content {
 		log.Println("IP address has not changed")
 		fmt.Println("\033[0;31m IP address has not changed \033[0m")
 		logFile.Close()
