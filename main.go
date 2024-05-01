@@ -186,12 +186,12 @@ func main() {
 
 	// Print the response body
 	var local_ip string = string(body)
-
+	log.Println("local IP: ", local_ip)
 
 // Check if the IP address has changed if not exit
 
 	if local_ip == A_rec.list[0].content {
-		log.Println("IP address has not changed")
+		log.Println("\033[0;31m IP address has not changed")
 		logFile.Close()
 		os.Exit(0)
 	}
