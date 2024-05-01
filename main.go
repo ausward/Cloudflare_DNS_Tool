@@ -13,6 +13,7 @@ import (
 	"example.com/v1/CF/get_config"
 )
 
+
 type DNS_REC struct {
 	zone_id interface{}
 	id      string
@@ -56,6 +57,8 @@ func main() {
 	header.Add("X-Auth-Key", key)
 
 
+	// get Zone IDs
+
 	var zones = http.Request{
 		Method: "GET",
 		URL: &url.URL{
@@ -96,6 +99,8 @@ func main() {
 	} else {
 		log.Fatal("No results found")
 	}
+
+// Get DNS records
 
 	var list = http.Request{
 		Method: "GET",
@@ -155,13 +160,13 @@ func main() {
 		dns_records.list = append(dns_records.list, rec)
 	}
 	for _, rec := range dns_records.list {
-		fmt.Println(rec)
+		fmt.Println(rec.String())
 	}
 
 	A_rec := DNS_REC_LIST{}
 	for _, record := range dns_records.list {
 		if record.typpe == "A" {
-			log.Println(record.content)
+			log.Println(record.String())
 			A_rec.list = append(A_rec.list, record)
 
 		}
@@ -181,8 +186,21 @@ func main() {
 
 	// Print the response body
 	var local_ip string = string(body)
+	log.Println("local IP: ", local_ip)
+	fmt.Println("local IP: ", local_ip)
 
-	
+
+// Check if the IP address has changed if not exit
+
+	if local_ip != A_rec.list[0].content {
+		log.Println("IP address has not changed")
+		fmt.Println("\033[0;31m IP address has not changed \033[0m")
+		logFile.Close()
+		os.Exit(0)
+	}
+
+
+	// Update the DNS  A records
 
 
 	for _, record := range A_rec.list {
