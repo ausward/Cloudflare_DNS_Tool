@@ -38,16 +38,16 @@ func main() {
 	var account_id string = ""
 
 
-	logPath := os.Getenv("LOGPATH")
-	if logPath == "" {
-		logPath = "./log.txt"
-	}
-	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer logFile.Close()
-	log.SetOutput(logFile)
+	// logPath := os.Getenv("LOGPATH")
+	// if logPath == "" {
+	// 	logPath = "./log.txt"
+	// }
+	// logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer logFile.Close()
+	// log.SetOutput(logFile)
 
 
 
@@ -243,6 +243,6 @@ func main() {
 		log.Println("payload:", payload, "\nresults:", result)
 
 	}
-	logFile.Close()
+	// logFile.Close()
 
 }
