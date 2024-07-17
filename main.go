@@ -8,11 +8,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 
 	"example.com/v1/CF/get_config"
 )
-
 
 type DNS_REC struct {
 	zone_id interface{}
@@ -25,37 +25,25 @@ type DNS_REC struct {
 	ttl     interface{}
 	content string
 }
-func (d DNS_REC) String() string{
-	return fmt.Sprintf("Name: %v\nType: %v\nProxied: %v\nComment: %v\nTags: %v\nTTL: %v\nContent: %v\n",  d.name, d.typpe, d.proxied, d.comment, d.tags, d.ttl, d.content)
+
+func (d DNS_REC) String() string {
+	return fmt.Sprintf("Name: %v\nType: %v\nProxied: %v\nComment: %v\nTags: %v\nTTL: %v\nContent: %v\n", d.name, d.typpe, d.proxied, d.comment, d.tags, d.ttl, d.content)
 }
+
 type DNS_REC_LIST struct {
 	list []DNS_REC
 }
 
 func main() {
+
 	email, key := get_config.Get_account_info()
 
 	var account_id string = ""
-
-
-	// logPath := os.Getenv("LOGPATH")
-	// if logPath == "" {
-	// 	logPath = "./log.txt"
-	// }
-	// logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// defer logFile.Close()
-	// log.SetOutput(logFile)
-
-
 
 	var header = http.Header{}
 	header.Add("X-Auth-Email", email)
 	header.Add("Content-Type", "application/json")
 	header.Add("X-Auth-Key", key)
-
 
 	// get Zone IDs
 
@@ -84,7 +72,7 @@ func main() {
 			ID string `json:"id"`
 		} `json:"result"`
 	}
-	
+
 	// log.Print(data.Result)
 
 	err = json.Unmarshal(body, &data)
@@ -100,7 +88,9 @@ func main() {
 		log.Fatal("No results found")
 	}
 
-// Get DNS records
+	// If there exists a create.yaml file that is not empty then create a new DNS record and exit
+
+	// Get DNS records
 
 	var list = http.Request{
 		Method: "GET",
@@ -122,20 +112,13 @@ func main() {
 		log.Fatal(err)
 	}
 	defer response.Body.Close()
-	// log.Print("\n\n\n")
-	// fmt.Println(string(body))
-	// println("\n\n\n")
+
 	// Convert body to JSON
 	var data2 interface{}
 	err = json.Unmarshal(body, &data2)
 	if err != nil {
 		log.Print(err)
 	}
-
-	// log.Println(data.Result)
-
-	// Print the JSON data
-	// fmt.Println(data)
 
 	dns_records := DNS_REC_LIST{}
 
@@ -189,18 +172,33 @@ func main() {
 	log.Println("local IP: ", local_ip)
 	fmt.Println("local IP: ", local_ip)
 
-// Check if the IP address has changed if not exit
+	// check to see if there is data in the create.yaml file, if there is add a new record by overwriting the existing records in the rec list with the new record
+
+	new, err := get_config.Read_yaml()
+	if err == nil {
+		new_dns := DNS_REC{
+			content: "192.168.0.0",
+			name:    new.Name,
+			typpe:   new.Typpe,
+			proxied: new.Proxied,
+			comment: new.Comment,
+			tags:    new.Tags,
+			ttl:     new.Ttl,
+		}
+
+		A_rec.list = append(A_rec.list, new_dns)
+		slices.Reverse(A_rec.list)
+	}
+
+	// Check if the IP address has changed if not exit
 
 	if local_ip == A_rec.list[0].content {
 		log.Println("IP address has not changed")
 		fmt.Println("\033[0;31m IP address has not changed \033[0m")
-		logFile.Close()
 		os.Exit(0)
 	}
 
-
 	// Update the DNS  A records
-
 
 	for _, record := range A_rec.list {
 		if record.comment == nil {
@@ -238,11 +236,10 @@ func main() {
 
 		log.Println(string(body))
 		log.Println(res)
-	result := res
+		result := res
 		// Print the result to the log file
 		log.Println("payload:", payload, "\nresults:", result)
 
 	}
-	// logFile.Close()
 
 }

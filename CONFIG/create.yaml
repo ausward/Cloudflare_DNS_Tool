@@ -1,0 +1,9 @@
+# content: "" # Should be the IP address
+# name: "" # The FQDN goes here WITHOUT the schema
+# Type: "A"
+# comment: "" # Optional
+# tags: [] # Optional
+# ttl: 180 # 1 is auto or Value must be between 60 and 86400
+
+# This file is used to create an A record
+# To use uncomment all of the fields below and fill in all the fields to the desired value
