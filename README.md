@@ -38,3 +38,10 @@ Yes! Feel free to fork the repository and make a pull request.
 
 look at https://hub.docker.com/r/auswar/cloudflare_dns_update
 
+
+
+## GitAds Sponsored
+[![Sponsored by GitAds](https://gitads.dev/v1/ad-serve?source=ausward/cloudflare_dns_tool@github)](https://gitads.dev/v1/ad-track?source=ausward/cloudflare_dns_tool@github)
+
+
+
