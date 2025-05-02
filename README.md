@@ -1,3 +1,5 @@
+<!-- GitAds-Verify: 3GO71XTDXU9WLKO8E4AGFKS62M1GRFJC -->
+
 ## What is this?
 
 This is a simple Golang script that uses CloudFlare's API to updates the A records IP address of a domain to the current public IP address of the machine running the script.
