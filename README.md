@@ -36,6 +36,7 @@ Yes! Feel free to fork the repository and make a pull request.
 
 ## What Docker image do I use?
 
+Use the package that is attached to this repo in GitHub or
 look at https://hub.docker.com/r/auswar/cloudflare_dns_update
 
 
