@@ -7,47 +7,80 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"slices"
 	"strings"
 
-	"example.com/v1/CF/get_config"
+	"example.com/v1/CF/get_config" // Assuming this is your local module for config
 )
 
+// DNS_REC represents a Cloudflare DNS record.
 type DNS_REC struct {
-	zone_id interface{}
-	id      string
-	name    interface{}
-	typpe   interface{}
-	proxied interface{}
-	comment interface{}
-	tags    interface{}
-	ttl     interface{}
-	content string
+	ZoneID  interface{} `json:"zone_id"`
+	ID      string      `json:"id"`
+	Name    interface{} `json:"name"`
+	Typpe   interface{} `json:"type"` // Changed to 'Typpe' to match your original
+	Proxied interface{} `json:"proxied"`
+	Comment interface{} `json:"comment"`
+	Tags    interface{} `json:"tags"`
+	Ttl     interface{} `json:"ttl"`
+	Content string      `json:"content"`
 }
 
+// String provides a formatted string representation of a DNS_REC.
 func (d DNS_REC) String() string {
-	return fmt.Sprintf("Name: %v\nType: %v\nProxied: %v\nComment: %v\nTags: %v\nTTL: %v\nContent: %v\n", d.name, d.typpe, d.proxied, d.comment, d.tags, d.ttl, d.content)
+	return fmt.Sprintf("Name: %v\nType: %v\nProxied: %v\nComment: %v\nTags: %v\nTTL: %v\nContent: %v\n", d.Name, d.Typpe, d.Proxied, d.Comment, d.Tags, d.Ttl, d.Content)
 }
 
+// DNS_REC_LIST holds a slice of DNS_REC.
 type DNS_REC_LIST struct {
 	list []DNS_REC
 }
 
+// Z (Zone) struct, currently unused but kept for completeness.
+type Z struct {
+	ID     string
+	Name   string
+	Status string
+}
+
 func main() {
-
+	// Get Cloudflare account email and API key from config.
 	email, key := get_config.Get_account_info()
+	// Create common HTTP headers for Cloudflare API authentication.
+	header := createAuthHeader(email, key)
 
-	var account_id string = ""
+	// Get all zone IDs associated with the account.
+	zoneIDs, err := getZoneIDs(header)
+	if err != nil {
+		log.Fatalf("Error getting zone IDs: %v", err)
+	}
 
-	var header = http.Header{}
+	// Get the current public IP address of the machine.
+	localIP, err := getCurrentPublicIP()
+	if err != nil {
+		log.Fatalf("Error getting local IP: %v", err)
+	}
+	fmt.Println("local IP:", localIP)
+	log.Println("local IP:", localIP)
+
+	// Process each zone: fetch DNS records, check for updates, and update if necessary.
+	for _, zoneID := range zoneIDs {
+		processZone(zoneID, header, localIP)
+	}
+}
+
+// createAuthHeader creates and returns standard HTTP headers for Cloudflare API authentication.
+func createAuthHeader(email, key string) http.Header {
+	header := make(http.Header)
 	header.Add("X-Auth-Email", email)
 	header.Add("Content-Type", "application/json")
 	header.Add("X-Auth-Key", key)
+	return header
+}
 
-	// get Zone IDs
-
-	var zones = http.Request{
+// getZoneIDs fetches all zone IDs associated with the Cloudflare account.
+func getZoneIDs(header http.Header) ([]string, error) {
+	var zonesRequest = http.Request{
 		Method: "GET",
 		URL: &url.URL{
 			Scheme: "https",
@@ -58,188 +91,190 @@ func main() {
 	}
 
 	netClient := &http.Client{}
-	response, err := netClient.Do(&zones)
+	response, err := netClient.Do(&zonesRequest)
 	if err != nil {
-		log.Fatal(err)
-	}
-	body, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("failed to make zones request: %w", err)
 	}
 	defer response.Body.Close()
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read zones response body: %w", err)
+	}
+
 	var data struct {
 		Result []struct {
 			ID string `json:"id"`
 		} `json:"result"`
 	}
+	if err := json.Unmarshal(body, &data); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal zones response: %w", err)
+	}
 
-	// log.Print(data.Result)
+	var zoneIDs []string
+	for _, id := range data.Result {
+		zoneIDs = append(zoneIDs, id.ID)
+	}
+	return zoneIDs, nil
+}
 
-	err = json.Unmarshal(body, &data)
+// getCurrentPublicIP fetches the current public IP address of the machine from ipify.org.
+func getCurrentPublicIP() (string, error) {
+	resp, err := http.Get("https://api.ipify.org")
 	if err != nil {
-		log.Fatal("No results found")
+		return "", fmt.Errorf("failed to get public IP: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read public IP response body: %w", err)
+	}
+	return strings.TrimSpace(string(body)), nil // Trim whitespace
+}
+
+// processZone handles the logic for a single zone, including fetching DNS records,
+// checking for new records from config, comparing IPs, and updating records.
+func processZone(zoneID string, header http.Header, localIP string) {
+	dnsRecords, err := getDNSRecords(zoneID, header)
+	if err != nil {
+		log.Printf("Error getting DNS records for zone %s: %v", zoneID, err)
+		return
 	}
 
-	if len(data.Result) > 0 {
-		firstID := data.Result[0].ID
-		// fmt.Println("First ID:", firstID)
-		account_id = firstID
-	} else {
-		log.Fatal("No results found")
+	aRecords := filterARecords(dnsRecords)
+
+	// Check for new records from create.yaml and add them.
+	// This assumes 'get_config.Read_yaml()' returns a struct with fields matching DNS_REC for creation.
+	newRecordConfig, err := get_config.Read_yaml()
+	if err == nil { // Only proceed if the file exists and is readable.
+		newDNS := DNS_REC{
+			Content: newRecordConfig.Content,
+			Name:    newRecordConfig.Name,
+			Typpe:   newRecordConfig.Typpe,
+			Proxied: newRecordConfig.Proxied,
+			Comment: newRecordConfig.Comment,
+			Tags:    newRecordConfig.Tags,
+			Ttl:     newRecordConfig.Ttl,
+		}
+		aRecords.list = append(aRecords.list, newDNS)
+		slices.Reverse(aRecords.list) // Reversing might be intended for priority.
 	}
 
-	// If there exists a create.yaml file that is not empty then create a new DNS record and exit
+	// Check if the IP address has changed. If not, log and return.
+	if len(aRecords.list) > 0 && localIP == aRecords.list[0].Content {
+		log.Printf("IP address for zone %s has not changed", zoneID)
+		fmt.Println("\033[0;31m IP address has not changed \033[0m")
+		return
+	}
 
-	// Get DNS records
+	log.Printf("Updating A records for zone %s with IP: %s", zoneID, localIP)
+	for _, record := range aRecords.list {
+		if record.Typpe == "A" { // Ensure we only try to update A records.
+			if err := updateDNSRecord(zoneID, record, localIP, header); err != nil {
+				log.Printf("Error updating DNS record %s for zone %s: %v", record.Name, zoneID, err)
+			}
+		}
+	}
+}
 
-	var list = http.Request{
+// getDNSRecords retrieves all DNS records for a given zone ID.
+func getDNSRecords(zoneID string, header http.Header) (DNS_REC_LIST, error) {
+	var listRequest = http.Request{
 		Method: "GET",
 		URL: &url.URL{
 			Scheme: "https",
 			Host:   "api.cloudflare.com",
-			Path:   "/client/v4/zones/" + account_id + "/dns_records",
+			Path:   fmt.Sprintf("/client/v4/zones/%s/dns_records", zoneID),
 		},
 		Header: header,
 	}
 
-	// netClient := &http.Client{}
-	response, err = netClient.Do(&list)
+	netClient := &http.Client{}
+	response, err := netClient.Do(&listRequest)
 	if err != nil {
-		log.Fatal(err)
-	}
-	body, err = ioutil.ReadAll(response.Body)
-	if err != nil {
-		log.Fatal(err)
+		return DNS_REC_LIST{}, fmt.Errorf("failed to make DNS records request: %w", err)
 	}
 	defer response.Body.Close()
 
-	// Convert body to JSON
-	var data2 interface{}
-	err = json.Unmarshal(body, &data2)
+	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		log.Print(err)
+		return DNS_REC_LIST{}, fmt.Errorf("failed to read DNS records response body: %w", err)
 	}
 
-	dns_records := DNS_REC_LIST{}
+	var data struct {
+		Result []map[string]interface{} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &data); err != nil {
+		return DNS_REC_LIST{}, fmt.Errorf("failed to unmarshal DNS records response: %w", err)
+	}
 
-	a_records := data2.(map[string]interface{})["result"].([]interface{})
-
-	for _, record := range a_records {
-		record := record.(map[string]interface{})
-
+	dnsRecords := DNS_REC_LIST{}
+	for _, record := range data.Result {
 		rec := DNS_REC{
-			id:      record["id"].(string),
-			zone_id: record["zone_id"],
-			name:    record["name"],
-			typpe:   record["type"],
-			proxied: record["proxied"],
-			comment: record["comment"],
-
-			tags: record["tags"],
-
-			content: record["content"].(string),
-			ttl:     record["ttl"],
+			ID:      record["id"].(string),
+			ZoneID:  record["zone_id"],
+			Name:    record["name"],
+			Typpe:   record["type"],
+			Proxied: record["proxied"],
+			Comment: record["comment"],
+			Tags:    record["tags"],
+			Content: record["content"].(string),
+			Ttl:     record["ttl"],
 		}
-		dns_records.list = append(dns_records.list, rec)
+		dnsRecords.list = append(dnsRecords.list, rec)
 	}
-	for _, rec := range dns_records.list {
-		fmt.Println(rec.String())
-	}
+	return dnsRecords, nil
+}
 
-	A_rec := DNS_REC_LIST{}
-	for _, record := range dns_records.list {
-		if record.typpe == "A" {
+// filterARecords filters a list of DNS records to only include "A" type records.
+func filterARecords(allRecords DNS_REC_LIST) DNS_REC_LIST {
+	aRecords := DNS_REC_LIST{}
+	for _, record := range allRecords.list {
+		if record.Typpe == "A" {
 			log.Println(record.String())
-			A_rec.list = append(A_rec.list, record)
-
+			aRecords.list = append(aRecords.list, record)
 		}
 	}
-	// Make API call to get IP address
-	test, err := http.Get("https://api.ipify.org")
+	return aRecords
+}
+
+// updateDNSRecord sends a PATCH request to update a specific DNS record with a new IP.
+func updateDNSRecord(zoneID string, record DNS_REC, newIP string, header http.Header) error {
+	if record.Comment == nil {
+		record.Comment = ""
+	}
+
+	url := fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%s/dns_records/%s", zoneID, record.ID)
+
+	payload := strings.NewReader(fmt.Sprintf(`{
+        "content": "%s",
+        "name": "%v",
+        "proxied": %v,
+        "type": "%v",
+        "comment": "%v",
+        "tags": [],
+        "ttl": %v
+    }`, newIP, record.Name, record.Proxied, record.Typpe, record.Comment, record.Ttl))
+
+	req, err := http.NewRequest("PATCH", url, payload)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to create update request: %w", err)
 	}
-	defer test.Body.Close()
+	req.Header = header
 
-	// Read the response body
-	body, err = ioutil.ReadAll(test.Body)
+	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("failed to execute update request: %w", err)
+	}
+	defer res.Body.Close()
+
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read update response body: %w", err)
 	}
 
-	// Print the response body
-	var local_ip string = string(body)
-	log.Println("local IP: ", local_ip)
-	fmt.Println("local IP: ", local_ip)
-
-	// check to see if there is data in the create.yaml file, if there is add a new record by overwriting the existing records in the rec list with the new record
-
-	new, err := get_config.Read_yaml()
-	if err == nil {
-		new_dns := DNS_REC{
-			content: "192.168.0.0",
-			name:    new.Name,
-			typpe:   new.Typpe,
-			proxied: new.Proxied,
-			comment: new.Comment,
-			tags:    new.Tags,
-			ttl:     new.Ttl,
-		}
-
-		A_rec.list = append(A_rec.list, new_dns)
-		slices.Reverse(A_rec.list)
-	}
-
-	// Check if the IP address has changed if not exit
-
-	if local_ip == A_rec.list[0].content {
-		log.Println("IP address has not changed")
-		fmt.Println("\033[0;31m IP address has not changed \033[0m")
-		os.Exit(0)
-	}
-
-	// Update the DNS  A records
-
-	for _, record := range A_rec.list {
-		if record.comment == nil {
-			record.comment = ""
-		}
-		url := fmt.Sprintf("https://api.cloudflare.com/client/v4/zones/%v/dns_records/%v", record.zone_id, record.id)
-
-		payload := strings.NewReader(fmt.Sprintf(`{
-			"content": "%v",
-			"name": "%v",
-			"proxied": %v,
-			"type": "%v",
-			"comment": "%v",
-			"tags": [],
-			"ttl": %v
-		}`, local_ip, record.name, record.proxied, record.typpe, record.comment, record.ttl))
-
-		req, err := http.NewRequest("PATCH", url, payload)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		req.Header = header
-
-		res, err := http.DefaultClient.Do(req)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		defer res.Body.Close()
-		body, err := ioutil.ReadAll(res.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		log.Println(string(body))
-		log.Println(res)
-		result := res
-		// Print the result to the log file
-		log.Println("payload:", payload, "\nresults:", result)
-
-	}
-
+	log.Printf("Update response for %s: %s", record.Name, string(body))
+	// log.Println("HTTP Response:", res)
+	return nil
 }

@@ -1,5 +1,6 @@
 # Stage 1: Build the Go container
 FROM golang:1.22.1-alpine AS builder
+LABEL org.opencontainers.image.source https://github.com/ausward/Cloudflare_DNS_Tool
 
 WORKDIR /app
 
