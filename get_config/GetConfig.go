@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -62,8 +63,9 @@ func Read_yaml() (*Create, error) {
 	var data []byte
 	if err != nil {
 		println("Not in Docker")
-		data, err = os.ReadFile("./CONFIG/create.yaml")	
+		data, err = os.ReadFile("./CONFIG/create.yaml")
 		if err != nil {
+			println("failed to read file: " + err.Error())
 			log.Fatalf("Failed to read file: %v", err)
 		}
 	
@@ -71,6 +73,8 @@ func Read_yaml() (*Create, error) {
 		println("In Docker")
 		data, err = os.ReadFile("/config/create.yaml")
 		if err != nil {
+						println("failed to read file: " + err.Error())
+
 			log.Fatalf("Failed to read file: %v", err)
 		}
 	}
@@ -78,6 +82,8 @@ func Read_yaml() (*Create, error) {
 	var create Create
 	err = yaml.Unmarshal(data, &create)
 	if err != nil {
+					println("failed to read file: " + err.Error())
+
 		log.Fatalf("Failed to unmarshal YAML: %v", err)
 	}
 
@@ -86,4 +92,52 @@ func Read_yaml() (*Create, error) {
 	}
 	// Access the values from the struct
 	return &create, nil
+}
+
+
+
+// Config struct to hold the ignore configuration.
+type Ignore struct {
+	Ignore []struct {
+		Domain    string   `yaml:"domain"`
+		DesiredIP string `yaml:"desired_ip"`
+	} `yaml:"ignore"`
+}
+
+func Read_ignore() (*Ignore, error) {
+	_, err := os.Stat("/.dockerenv")
+	var data []byte
+	if err != nil {
+		println("Not in Docker")
+		data, err = os.ReadFile("./CONFIG/ignore.yaml")
+		if err != nil {
+			return nil, err
+		}
+
+	} else {
+		println("In Docker")
+		data, err = os.ReadFile("/config/ignore.yaml")
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Unmarshal the YAML data into a struct
+	var ignore Ignore
+	err = yaml.Unmarshal(data, &ignore)
+	if err != nil {
+		return nil, err
+	}
+
+	// Access the values from the struct
+	return &ignore, nil
+}
+
+func Match_string(pattern, target string) (bool, error) {
+	// Compile the regex pattern. This will return an error if the pattern is invalid.
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return false, errors.New("invalid regex pattern '" + pattern + "': " + err.Error())
+	}
+	// Check if the target string matches the compiled regex.
+	return re.MatchString(target), nil
 }

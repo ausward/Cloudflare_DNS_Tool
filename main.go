@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"slices"
 	"strings"
 
@@ -52,6 +53,8 @@ func main() {
 	// Get all zone IDs associated with the account.
 	zoneIDs, err := getZoneIDs(header)
 	if err != nil {
+		println("Error getting Zone IDS: " + err.Error())
+
 		log.Fatalf("Error getting zone IDs: %v", err)
 	}
 
@@ -63,10 +66,19 @@ func main() {
 	fmt.Println("local IP:", localIP)
 	log.Println("local IP:", localIP)
 
+	// get ignore data
+
+	ignore, err := get_config.Read_ignore()
+	if err != nil {
+		println("Could not get ignore " + err.Error())
+		ignore = nil
+	}
+
 	// Process each zone: fetch DNS records, check for updates, and update if necessary.
 	for _, zoneID := range zoneIDs {
-		processZone(zoneID, header, localIP)
+		processZone(zoneID, header, localIP, ignore)
 	}
+
 }
 
 // createAuthHeader creates and returns standard HTTP headers for Cloudflare API authentication.
@@ -135,19 +147,20 @@ func getCurrentPublicIP() (string, error) {
 
 // processZone handles the logic for a single zone, including fetching DNS records,
 // checking for new records from config, comparing IPs, and updating records.
-func processZone(zoneID string, header http.Header, localIP string) {
+func processZone(zoneID string, header http.Header, localIP string, ignore *get_config.Ignore) {
 	dnsRecords, err := getDNSRecords(zoneID, header)
 	if err != nil {
+		println("Error getting DNS Records for Zone " + zoneID + ": " + err.Error()) // Added space for readability
 		log.Printf("Error getting DNS records for zone %s: %v", zoneID, err)
 		return
 	}
 
+	// println("Getting A recs")
 	aRecords := filterARecords(dnsRecords)
 
 	// Check for new records from create.yaml and add them.
-	// This assumes 'get_config.Read_yaml()' returns a struct with fields matching DNS_REC for creation.
 	newRecordConfig, err := get_config.Read_yaml()
-	if err == nil { // Only proceed if the file exists and is readable.
+	if err == nil && newRecordConfig != nil { // Only proceed if the file exists and is readable, and content is not nil
 		newDNS := DNS_REC{
 			Content: newRecordConfig.Content,
 			Name:    newRecordConfig.Name,
@@ -159,21 +172,69 @@ func processZone(zoneID string, header http.Header, localIP string) {
 		}
 		aRecords.list = append(aRecords.list, newDNS)
 		slices.Reverse(aRecords.list) // Reversing might be intended for priority.
+	} else if err != nil && !os.IsNotExist(err) { // Log error if it's not just "file not found"
+		log.Printf("Warning: Could not read create.yaml: %v (Proceeding without adding new records)", err)
 	}
 
-	// Check if the IP address has changed. If not, log and return.
-	if len(aRecords.list) > 0 && localIP == aRecords.list[0].Content {
-		log.Printf("IP address for zone %s has not changed", zoneID)
-		fmt.Println("\033[0;31m IP address has not changed \033[0m")
+	// --- NEW LOGIC: Filter out ignored records before IP change check ---
+	var managedARecords DNS_REC_LIST // This will hold A records that are NOT ignored
+
+	println("Applying ignore rules and filtering records...")
+filterLoop: // Label for the filtering loop
+	for _, record := range aRecords.list {
+		// Only consider A records for management
+		if record.Typpe != "A" {
+			continue // Skip non-A records from being added to managedARecords
+		}
+
+		if ignore != nil { // Ensure ignore object exists
+			for _, ignoreRecord := range ignore.Ignore {
+				if ignoreRecord.Domain != "" {
+					matched, err := get_config.Match_string(ignoreRecord.Domain, record.Name.(string))
+					if err != nil {
+						log.Printf("Error matching regex pattern '%s' against record name '%s': %v. This ignore rule will be skipped for this record.", ignoreRecord.Domain, record.Name, err)
+						continue // Continue to the next ignoreRecord in the list if the current pattern is invalid.
+					}
+					if matched {
+						// Print ignored domain in red text
+						fmt.Printf("\033[0;31mSkipping DNS record '%s' (ID: %s) in zone '%s' as it matches ignore pattern '%s'.\033[0m\n", record.Name, record.ID, zoneID, ignoreRecord.Domain)
+						log.Printf("Skipping DNS record '%s' (ID: %s) in zone '%s' as it matches ignore pattern '%s'.", record.Name, record.ID, zoneID, ignoreRecord.Domain)
+
+						// Check for desired IP conflict (if desired_ip is specified)
+						if ignoreRecord.DesiredIP != record.Content {
+
+							fmt.Printf("\033[41mIP Mismatch for '%s': Current IP is '%s', Desired IPs are '%s'. (NO ACTION TAKEN)\033[0m\n",
+								record.Name, record.Content, ignoreRecord.DesiredIP)
+							log.Printf("IP Mismatch for '%s': Current IP is '%s', Desired IPs are '%s'. (NO ACTION TAKEN)",
+								record.Name, record.Content, ignoreRecord.DesiredIP)
+						}
+
+						continue filterLoop // Skip to the next 'record' in aRecords.list (don't add to managedARecords)
+					}
+				}
+			}
+		}
+		// If the record is an A record and was not ignored, add it to the managed list
+		managedARecords.list = append(managedARecords.list, record)
+	}
+	// --- END NEW LOGIC ---
+
+	// Check if the IP address has changed. This check now only applies to *managed* A records.
+	if len(managedARecords.list) > 0 && localIP == managedARecords.list[0].Content {
+		log.Printf("IP address for managed records in zone %s has not changed for first A record. Skipping updates.", zoneID)
+		fmt.Println("\033[0;31m IP address has not changed for managed records \033[0m")
 		return
 	}
 
 	log.Printf("Updating A records for zone %s with IP: %s", zoneID, localIP)
-	for _, record := range aRecords.list {
-		if record.Typpe == "A" { // Ensure we only try to update A records.
-			if err := updateDNSRecord(zoneID, record, localIP, header); err != nil {
-				log.Printf("Error updating DNS record %s for zone %s: %v", record.Name, zoneID, err)
-			}
+	// Now iterate only over the managed records for actual updates
+	for _, record := range managedARecords.list {
+		// No need for ignore checks here, as they've already been filtered out
+		if err := updateDNSRecord(zoneID, record, localIP, header); err != nil {
+			log.Printf("Error updating DNS record %s for zone %s: %v", record.Name, zoneID, err)
+		} else {
+			log.Printf("Successfully updated DNS record '%s' (ID: %s) to IP: %s in zone '%s'.", record.Name, record.ID, localIP, zoneID)
+			fmt.Printf("Successfully updated DNS record '%s' to IP: %s\n", record.Name, localIP)
 		}
 	}
 }
@@ -232,7 +293,7 @@ func filterARecords(allRecords DNS_REC_LIST) DNS_REC_LIST {
 	aRecords := DNS_REC_LIST{}
 	for _, record := range allRecords.list {
 		if record.Typpe == "A" {
-			log.Println(record.String())
+			// log.Println(record.String())
 			aRecords.list = append(aRecords.list, record)
 		}
 	}
