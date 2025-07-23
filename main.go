@@ -155,7 +155,6 @@ func processZone(zoneID string, header http.Header, localIP string, ignore *get_
 		return
 	}
 
-	// println("Getting A recs")
 	aRecords := filterARecords(dnsRecords)
 
 	// Check for new records from create.yaml and add them.
