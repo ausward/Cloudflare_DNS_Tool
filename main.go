@@ -200,7 +200,7 @@ filterLoop: // Label for the filtering loop
 						log.Printf("Skipping DNS record '%s' (ID: %s) in zone '%s' as it matches ignore pattern '%s'.", record.Name, record.ID, zoneID, ignoreRecord.Domain)
 
 						// Check for desired IP conflict (if desired_ip is specified)
-						if ignoreRecord.DesiredIP != record.Content {
+						if ignoreRecord.DesiredIP != "" && ignoreRecord.DesiredIP != record.Content {
 
 							fmt.Printf("\033[41mIP Mismatch for '%s': Current IP is '%s', Desired IPs are '%s'. (NO ACTION TAKEN)\033[0m\n",
 								record.Name, record.Content, ignoreRecord.DesiredIP)
