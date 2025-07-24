@@ -14,6 +14,15 @@ import (
 	"example.com/v1/CF/get_config" // Assuming this is your local module for config
 )
 
+// CloudflareError represents an error response from Cloudflare API
+type CloudflareError struct {
+	Errors []struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	} `json:"errors"`
+	Success bool `json:"success"`
+}
+
 // DNS_REC represents a Cloudflare DNS record.
 type DNS_REC struct {
 	ZoneID  interface{} `json:"zone_id"`
@@ -81,6 +90,27 @@ func main() {
 
 }
 
+// checkCloudflareResponse checks HTTP response status and parses Cloudflare API errors
+func checkCloudflareResponse(resp *http.Response, body []byte, operation string) error {
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		return nil // Success status code
+	}
+
+	// Handle authentication errors specifically
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		return fmt.Errorf("authentication failed for %s: invalid API key or email. Please check your Cloudflare credentials in the config file (HTTP %d)", operation, resp.StatusCode)
+	}
+
+	// Try to parse Cloudflare error response
+	var cfError CloudflareError
+	if err := json.Unmarshal(body, &cfError); err == nil && len(cfError.Errors) > 0 {
+		return fmt.Errorf("%s failed: %s (HTTP %d)", operation, cfError.Errors[0].Message, resp.StatusCode)
+	}
+
+	// Fallback to generic error
+	return fmt.Errorf("%s failed with HTTP status %d: %s", operation, resp.StatusCode, string(body))
+}
+
 // createAuthHeader creates and returns standard HTTP headers for Cloudflare API authentication.
 func createAuthHeader(email, key string) http.Header {
 	header := make(http.Header)
@@ -112,6 +142,11 @@ func getZoneIDs(header http.Header) ([]string, error) {
 	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read zones response body: %w", err)
+	}
+
+	// Check for HTTP errors including authentication failures
+	if err := checkCloudflareResponse(response, body, "getting zones"); err != nil {
+		return nil, err
 	}
 
 	var data struct {
@@ -262,6 +297,11 @@ func getDNSRecords(zoneID string, header http.Header) (DNS_REC_LIST, error) {
 		return DNS_REC_LIST{}, fmt.Errorf("failed to read DNS records response body: %w", err)
 	}
 
+	// Check for HTTP errors including authentication failures
+	if err := checkCloudflareResponse(response, body, "getting DNS records"); err != nil {
+		return DNS_REC_LIST{}, err
+	}
+
 	var data struct {
 		Result []map[string]interface{} `json:"result"`
 	}
@@ -332,6 +372,11 @@ func updateDNSRecord(zoneID string, record DNS_REC, newIP string, header http.He
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read update response body: %w", err)
+	}
+
+	// Check for HTTP errors including authentication failures
+	if err := checkCloudflareResponse(res, body, "updating DNS record"); err != nil {
+		return err
 	}
 
 	log.Printf("Update response for %s: %s", record.Name, string(body))
