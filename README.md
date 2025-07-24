@@ -14,6 +14,7 @@ I made this script because I needed to needed to update the A records of a domai
 1. Clone the repository
 2. Update the `config.yaml` @ `./CONFIG/config.yaml` file with your CloudFlare API key and email.
 3. If you want to create a new A record for a domain, uncomment the /config/create.yaml file and fill in the fields with the correct information, and once ran recomment out the line so it does not run again.
+4. If you want to ignore some domains or subdomains add them to `ignore.yaml`, It uses Regex to filter out domains you don't want updated. 
 3. Run the script with `go run main.go` or `go build main.go` and then run the executable.
 
 ### From Docker
