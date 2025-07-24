@@ -1,0 +1,9 @@
+# ignore:
+#   - domain: example.com
+#     desired_ip:
+#       - 1.1.1.1
+#   - domain: example.net
+#   - domain: example.org
+#     desired_ip:
+#       - 3.3.3.3
+
